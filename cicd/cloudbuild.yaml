@@ -1,0 +1,50 @@
+steps:
+  - name: python:3.11
+    id : "Install dependencies and test"
+    entrypoint: "bash"
+    args:
+      - -c
+      - |
+        cd app
+        pip install -r requirements.txt
+        pytest -v
+
+  - name: gcr.io/cloud-builders/docker
+    id: "Build Docker image"
+    args:
+      - build
+      - -f
+      - docker/Dockerfile
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/flask-app:${SHORT_SHA}
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    id: "Push Docker image to Artifact Registry"
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/flask-app:${SHORT_SHA}
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: "Deploy to GKE"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        gcloud container clusters get-credentials ${_CLUSTER_NAME} --region ${_REGION} --project $PROJECT_ID
+        sed "s|IMAGE_PLACEHOLDER|${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/flask-app:${SHORT_SHA}|g" k8s/deployment.yaml | kubectl apply -f -
+        kubectl apply -f k8s/namespace.yaml
+        kubectl apply -f k8s/configmap.yaml
+        kubectl apply -f k8s/service.yaml
+        kubectl apply -f k8s/hpa.yaml
+        kubectl apply -f k8s/pdb.yaml
+        kubectl rollout status deployment/flask-app -n prod
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/flask-app:${SHORT_SHA}
+
+
+substitutions:
+  _REGION: "us-central1"
+  _AR_REPO: "apps"
+  _CLUSTER_NAME: "devops-gke" 

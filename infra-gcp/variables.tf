@@ -19,3 +19,9 @@ variable "environment" {
   type    = string
   default = "dev"
 }
+
+variable "impersonate_service_account" {
+  type    = string
+  default = ""
+
+}

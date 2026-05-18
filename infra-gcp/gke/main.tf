@@ -9,6 +9,13 @@ resource "google_container_cluster" "primary" {
   remove_default_node_pool = true
   initial_node_count       = 1
 
+  # This temporary default node pool is created during cluster bootstrap.
+  # Force standard persistent disk to avoid consuming SSD regional quota.
+  node_config {
+    disk_type    = "pd-standard"
+    disk_size_gb = 30
+  }
+
   release_channel {
     channel = "REGULAR"
   }
@@ -22,10 +29,14 @@ resource "google_container_node_pool" "primary_nodes" {
   name       = "${var.cluster_name}-node-pool"
   cluster    = google_container_cluster.primary.name
   location   = var.region
-  node_count = 2
+  node_count = 1
+
+  depends_on = [google_container_cluster.primary]
 
   node_config {
     machine_type    = "e2-standard-2"
+    disk_type       = "pd-standard"
+    disk_size_gb    = 30
     service_account = null
     oauth_scopes = [
       "https://www.googleapis.com/auth/cloud-platform",
